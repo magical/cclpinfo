@@ -7,27 +7,25 @@
 #include <string.h>
 
 #define PASSWORD_MASK 0x99
-#define CHIP_TILE (word)0x02
+#define CHIP_TILE 0x02
 
 // This is used when seperating the filename from the path.
 // When compiling for *nix, it should be changed to '/'
 #define DIR_SEPERATOR '/'
 
 typedef unsigned char byte;
-typedef uint16_t word;
-typedef uint32_t dword;
 
 struct levelinfo {
-	word number;
-	word time;
-	word chips;
+	int number;
+	int time;
+	int chips;
 	int totalchips;
 	char *title;
 	char *password;
 	char *hint;
-	word upperlayersize;
+	int upperlayersize;
 	byte *upperlayer;
-	word lowerlayersize;
+	int lowerlayersize;
 	byte *lowerlayer;
 };
 
@@ -68,11 +66,24 @@ char *readstring(FILE *fp, int len)
 {
 	char *buf = malloc(len + 1);
 	ssize_t n = fread(buf, 1, len, fp);
+	if (n > 0 && buf[n - 1] != '\0') {
+		fprintf(stderr, "warning: string not null terminated\n");
+	}
 	buf[n] = '\0';
 	return buf;
 }
 
-int count_tiles(byte *layerdata, word layersize, byte search_tile)
+void skipbytes(FILE *fp, int n)
+{
+	if (fseek(fp, n, SEEK_CUR) < 0) {
+		while (n--) {
+			fgetc(fp);
+		}
+		//perror("fseek");
+	}
+}
+
+int count_tiles(byte *layerdata, int layersize, byte search_tile)
 {
 	int count = 0;
 	int i = 0;
@@ -96,7 +107,7 @@ int count_tiles(byte *layerdata, word layersize, byte search_tile)
 void readlevel(FILE *fp, off_t levelsize, struct levelinfo *info)
 {
 	int l = levelsize;
-	word miscsize;
+	int miscsize;
 	int i;
 
 	info->number = readword(fp); // the level number
@@ -118,15 +129,15 @@ void readlevel(FILE *fp, off_t levelsize, struct levelinfo *info)
 		info->totalchips += count_tiles(info->lowerlayer, info->lowerlayersize, CHIP_TILE);
 	} else {
 		info->upperlayersize = readword(fp); // length of upper layer data
-		fseek(fp, info->upperlayersize, SEEK_CUR);
+		skipbytes(fp, info->upperlayersize);
 		info->lowerlayersize = readword(fp); // length of lower layer data
-		fseek(fp, info->lowerlayersize, SEEK_CUR);
+		skipbytes(fp, info->lowerlayersize);
 	}
 	l -= info->upperlayersize;
 	l -= info->lowerlayersize;
 
 	miscsize = readword(fp); // length of misc data
-	l -= sizeof(word) * 7;
+	l -= sizeof(uint16_t) * 7;
 
 	while (l > 0) {
 		byte fieldnum, fieldlength;
@@ -152,7 +163,7 @@ void readlevel(FILE *fp, off_t levelsize, struct levelinfo *info)
 		// I don't know what 8 and 9 are for
 		// 10: creature list
 		default:
-			fseek(fp, fieldlength, SEEK_CUR);
+			skipbytes(fp, fieldlength);
 		}
 		l -= fieldlength + 2;
 	}
@@ -212,7 +223,7 @@ int processFile(const char *filename)
 {
 	FILE *fp = NULL;
 	struct levelinfo info = {};
-	word nLevels = 0, l;
+	int nLevels, i;
 	uint32_t signature;
 
 	fp = fopen(filename, "rb");
@@ -237,8 +248,8 @@ int processFile(const char *filename)
 	       (options.display_time ? "\tTime" : ""),
 	       (options.display_chips ? "\tChips" : ""));
 
-	for (l = 1; l <= nLevels; ++l) {
-		word levelsize = readword(fp);
+	for (i = 1; i <= nLevels; i++) {
+		int levelsize = readword(fp);
 		if (levelsize == 0)
 			break;
 		readlevel(fp, levelsize, &info);
@@ -308,6 +319,7 @@ int main(int argc, const char *argv[])
 		}
 	}
 
+	err = 0;
 	nfiles = 0;
 	for (i = 1; i < argc; i++) {
 		if (argv[i][0] != '-') {
