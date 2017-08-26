@@ -74,22 +74,29 @@ void skipbytes(FILE *fp, int n)
 	}
 }
 
-int count_tiles(byte *layerdata, int layersize, byte search_tile)
+int count_tiles(FILE *fp, int layersize, int search_tile)
 {
 	int count = 0;
-	int i = 0;
+	int c, tile;
 
-	while (i < layersize) {
-		if (layerdata[i] == search_tile) {
-			count += 1;
-			i += 1;
-		} else if (layerdata[i] == 0xff) {
-			if (layerdata[i + 2] == search_tile) {
-				count += layerdata[i + 1];
+	while (layersize > 0) {
+		c = fgetc(fp);
+		if (c == EOF) {
+			warn("unexpected end of file");
+			break;
+		}
+		if (c == 0xff) {
+			c = fgetc(fp);
+			tile = fgetc(fp);
+			if (tile == search_tile) {
+				count += c;
 			}
-			i += 3;
+			layersize -= 3;
 		} else {
-			i += 1;
+			if (c == search_tile) {
+				count += 1;
+			}
+			layersize -= 1;
 		}
 	}
 	return count;
@@ -105,30 +112,20 @@ void readlevel(FILE *fp, off_t levelsize, struct levelinfo *info)
 	info->time = readword(fp);   // the time limit
 	info->chips = readword(fp);  // # chips required
 	readword(fp);                // 0x0001
+	l -= 2 * 4;
 
 	info->totalchips = 0;
-	if (options.showchips) {
-		info->upperlayersize = readword(fp); // length of upper layer data
-		info->upperlayer = malloc(info->upperlayersize);
-		fread(info->upperlayer, sizeof(byte), info->upperlayersize, fp);
+	info->upperlayersize = readword(fp); // length of upper layer data
+	info->totalchips += count_tiles(fp, info->upperlayersize, CHIP_TILE);
+	info->lowerlayersize = readword(fp); // length of lower layer data
+	info->totalchips += count_tiles(fp, info->lowerlayersize, CHIP_TILE);
 
-		info->lowerlayersize = readword(fp); // length of lower layer data
-		info->lowerlayer = malloc(info->lowerlayersize);
-		fread(info->lowerlayer, sizeof(byte), info->lowerlayersize, fp);
-
-		info->totalchips += count_tiles(info->upperlayer, info->upperlayersize, CHIP_TILE);
-		info->totalchips += count_tiles(info->lowerlayer, info->lowerlayersize, CHIP_TILE);
-	} else {
-		info->upperlayersize = readword(fp); // length of upper layer data
-		skipbytes(fp, info->upperlayersize);
-		info->lowerlayersize = readword(fp); // length of lower layer data
-		skipbytes(fp, info->lowerlayersize);
-	}
-	l -= info->upperlayersize;
-	l -= info->lowerlayersize;
+	l -= 2 + info->upperlayersize;
+	l -= 2 + info->lowerlayersize;
 
 	miscsize = readword(fp); // length of misc data
-	l -= sizeof(uint16_t) * 7;
+	l -= 2;
+
 
 	while (l > 0) {
 		byte fieldnum, fieldlength;
