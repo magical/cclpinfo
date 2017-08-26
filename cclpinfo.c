@@ -33,8 +33,6 @@ struct levelinfo {
 
 struct
 {
-	const char *datfile_name;
-	const char *savefile_name;
 	bool display_passwords;
 	bool display_time;
 	bool display_hints;
@@ -210,29 +208,29 @@ const char *extract_filename(const char *path)
 	return filename;
 }
 
-int processFile(const char *szDatFileName)
+int processFile(const char *filename)
 {
 	FILE *fp = NULL;
 	struct levelinfo info = {};
 	word nLevels = 0, l;
 	uint32_t signature;
 
-	fp = fopen(szDatFileName, "rb");
+	fp = fopen(filename, "rb");
 	if (!fp) {
-		printf("Unable to open file: %s\n", szDatFileName);
+		printf("Unable to open file: %s\n", filename);
 		return 1;
 	}
 
 	signature = readdword(fp);
 	if (signature != 0x0002aaac && signature != 0x0102aaac) {
-		fprintf(stderr, "%s is not a valid Chip's Challenge file.\n", szDatFileName);
+		fprintf(stderr, "%s is not a valid Chip's Challenge file.\n", filename);
 		fclose(fp);
 		return 1;
 	}
 
 	nLevels = readword(fp);
 
-	printf("%s\n\n", extract_filename(szDatFileName));
+	printf("%s\n\n", extract_filename(filename));
 
 	printf("  #. %-35s%s%s%s\n", "Title",
 	       (options.display_passwords ? "\tPass" : ""),
@@ -248,41 +246,48 @@ int processFile(const char *szDatFileName)
 		freelevel(&info);
 	}
 
+	printf("\n");
+
 	fclose(fp);
 	return 0;
+}
+
+void usage(const char *program)
+{
+	puts("cclpinfo v1.4 written by Andrew E. and Madhav Shanbhag");
+	puts("");
+	printf("Usage:\t%s [-ptch] files...\n", program);
+	puts("");
+	puts("\tfiles\tone or more levelsets to read");
+	puts("\t-p\tshow passwords");
+	puts("\t-t\tshow time limits");
+	puts("\t-c\tshow chips required/available");
+	puts("\t-h\tshow hints");
+	puts("");
+	puts("For more information, read README.TXT");
 }
 
 int main(int argc, const char *argv[])
 {
 	int i, j;
+	int nfiles;
+	int err;
 
 	if (argc <= 1) {
-		puts("cclpinfo v1.4 written by Andrew E. and Madhav Shanbhag");
-		puts("");
-		printf("Usage:\t%s file [-ptch]\n", argv[0]);
-		puts("");
-		puts("\tfile\tThe location of the .dat file to use");
-		puts("\t-p\tdisplay passwords");
-		puts("\t-t\tdisplay the time limits");
-		puts("\t-c\tdisplay chips required/available");
-		puts("\t-h\tdisplay the level hints");
-		puts("");
-		puts("For more information, read README.TXT");
+		usage(argv[0]);
 		return 2;
 	}
 
 	// initialize the options
-	options.datfile_name = NULL;
-	options.savefile_name = NULL;
 	options.display_passwords = false;
 	options.display_time = false;
 	options.display_chips = false;
 	options.display_hints = false;
 
 	//parse the command-line options
-	for (i = 1; i < argc; i += 1) {
+	for (i = 1; i < argc; i++) {
 		if (argv[i][0] == '-') {
-			for (j = 1; j < strlen(argv[i]); j += 1) {
+			for (j = 1; argv[i][j] != '\0'; j++) {
 				switch (argv[i][j]) {
 				case 'p':
 					options.display_passwords = true;
@@ -297,17 +302,26 @@ int main(int argc, const char *argv[])
 					options.display_hints = true;
 					break;
 				default:
-					fprintf(stderr, "Warning: option -%c is invalid\n", argv[i][j]);
+					fprintf(stderr, "Warning: unknown option -%c\n", argv[i][j]);
 				}
 			}
-		} else if (options.datfile_name == NULL) {
-			options.datfile_name = argv[i];
 		}
 	}
-	if (options.datfile_name == NULL) {
-		fprintf(stderr, "Error: no datfile is specified");
-		return -1;
+
+	nfiles = 0;
+	for (i = 1; i < argc; i++) {
+		if (argv[i][0] != '-') {
+			nfiles++;
+			if (processFile(argv[i]) != 0) {
+				err = 1;
+			}
+		}
 	}
 
-	return processFile(options.datfile_name);
+	if (nfiles == 0) {
+		fprintf(stderr, "error: no files specified");
+		return 2;
+	}
+
+	return err;
 }
