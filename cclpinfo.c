@@ -39,27 +39,18 @@ struct
 
 uint8_t readbyte(FILE *fp)
 {
-	byte buf[1] = {};
+	uint8_t buf[1] = {};
 	fread(buf, sizeof buf, 1, fp);
 	return buf[0];
 }
 
 uint16_t readword(FILE *fp)
 {
-	byte buf[2] = {};
+	uint8_t buf[2] = {};
 	if (fread(buf, sizeof buf, 1, fp) != 1) {
 		return 0;
 	}
 	return ((uint16_t)buf[0]) | ((uint16_t)buf[1] << 8);
-}
-
-uint32_t readdword(FILE *fp)
-{
-	byte buf[4] = {};
-	if (fread(buf, sizeof buf, 1, fp) != 1) {
-		return 0;
-	}
-	return ((uint32_t)buf[0]) | ((uint32_t)buf[1] << 8) | ((uint32_t)buf[2] << 16) | ((uint32_t)buf[3] << 24);
 }
 
 char *readstring(FILE *fp, int len)
@@ -224,7 +215,7 @@ int processFile(const char *filename)
 	FILE *fp = NULL;
 	struct levelinfo info = {};
 	int nLevels, i;
-	uint32_t signature;
+	uint16_t signature, version;
 
 	fp = fopen(filename, "rb");
 	if (!fp) {
@@ -232,8 +223,9 @@ int processFile(const char *filename)
 		return 1;
 	}
 
-	signature = readdword(fp);
-	if (signature != 0x0002aaac && signature != 0x0102aaac) {
+	signature = readword(fp);
+	version = readword(fp);
+	if (signature != 0xaaac || (version != 0x0002 && version != 0x0102)) {
 		fprintf(stderr, "%s is not a valid Chip's Challenge file.\n", filename);
 		fclose(fp);
 		return 1;
