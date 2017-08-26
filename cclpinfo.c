@@ -1,5 +1,6 @@
 /* cclpinfo v1.4 */
 
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -70,6 +71,16 @@ void skipbytes(FILE *fp, int n)
 	}
 }
 
+void warn(const char *fmt, ...)
+{
+	va_list va;
+	va_start(va, fmt);
+	vfprintf(stderr, fmt, va);
+	va_end(va);
+	fprintf(stderr, "\n");
+	//abort();
+}
+
 int count_tiles(FILE *fp, int layersize, int search_tile)
 {
 	int count = 0;
@@ -122,6 +133,13 @@ void readlevel(FILE *fp, off_t levelsize, struct levelinfo *info)
 	miscsize = readword(fp); // length of misc data
 	l -= 2;
 
+	if (miscsize != l) {
+		warn("mismatch between level size and misc data size");
+	}
+
+	if (miscsize > 1152) {
+		warn("misc data size is greater than 1152 bytes; MSCC will not be able to load this level");
+	}
 
 	while (l > 0) {
 		int fieldnum, fieldlength;
