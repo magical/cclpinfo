@@ -31,10 +31,10 @@ struct levelinfo {
 
 struct
 {
-	bool display_passwords;
-	bool display_time;
-	bool display_hints;
-	bool display_chips;
+	bool showpassword;
+	bool showtime;
+	bool showhint;
+	bool showchips;
 } options;
 
 uint8_t readbyte(FILE *fp)
@@ -116,7 +116,7 @@ void readlevel(FILE *fp, off_t levelsize, struct levelinfo *info)
 	readword(fp);                // 0x0001
 
 	info->totalchips = 0;
-	if (options.display_chips) {
+	if (options.showchips) {
 		info->upperlayersize = readword(fp); // length of upper layer data
 		info->upperlayer = malloc(info->upperlayersize);
 		fread(info->upperlayer, sizeof(byte), info->upperlayersize, fp);
@@ -183,17 +183,17 @@ void freelevel(struct levelinfo *info)
 void printlevel(FILE *out, struct levelinfo *info)
 {
 	fprintf(out, "%3d. %-35s ", info->number, info->title);
-	if (options.display_passwords) {
+	if (options.showpassword) {
 		fprintf(out, "\t%s", info->password);
 	}
-	if (options.display_time) {
+	if (options.showtime) {
 		if (info->time == 0) {
 			fprintf(out, "\t---");
 		} else {
 			fprintf(out, "\t%03d", info->time);
 		}
 	}
-	if (options.display_chips) {
+	if (options.showchips) {
 		if (info->chips == info->totalchips) {
 			fprintf(out, "\t%d", info->chips);
 		} else {
@@ -203,7 +203,7 @@ void printlevel(FILE *out, struct levelinfo *info)
 
 	fprintf(out, "\n");
 
-	if (options.display_hints && info->hint != NULL) {
+	if (options.showhint && info->hint != NULL) {
 		fprintf(out, "     %s\n", info->hint);
 	}
 }
@@ -244,9 +244,9 @@ int processFile(const char *filename)
 	printf("%s\n\n", extract_filename(filename));
 
 	printf("  #. %-35s%s%s%s\n", "Title",
-	       (options.display_passwords ? "\tPass" : ""),
-	       (options.display_time ? "\tTime" : ""),
-	       (options.display_chips ? "\tChips" : ""));
+	       (options.showpassword ? "\tPass" : ""),
+	       (options.showtime ? "\tTime" : ""),
+	       (options.showchips ? "\tChips" : ""));
 
 	for (i = 1; i <= nLevels; i++) {
 		int levelsize = readword(fp);
@@ -290,10 +290,10 @@ int main(int argc, const char *argv[])
 	}
 
 	// initialize the options
-	options.display_passwords = false;
-	options.display_time = false;
-	options.display_chips = false;
-	options.display_hints = false;
+	options.showpassword = false;
+	options.showtime = false;
+	options.showchips = false;
+	options.showhint = false;
 
 	//parse the command-line options
 	for (i = 1; i < argc; i++) {
@@ -301,16 +301,16 @@ int main(int argc, const char *argv[])
 			for (j = 1; argv[i][j] != '\0'; j++) {
 				switch (argv[i][j]) {
 				case 'p':
-					options.display_passwords = true;
+					options.showpassword = true;
 					break;
 				case 't':
-					options.display_time = true;
+					options.showtime = true;
 					break;
 				case 'c':
-					options.display_chips = true;
+					options.showchips = true;
 					break;
 				case 'h':
-					options.display_hints = true;
+					options.showhint = true;
 					break;
 				default:
 					fprintf(stderr, "Warning: unknown option -%c\n", argv[i][j]);
