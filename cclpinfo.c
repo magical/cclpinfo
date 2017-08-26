@@ -13,8 +13,6 @@
 // When compiling for *nix, it should be changed to '/'
 #define DIR_SEPERATOR '/'
 
-typedef unsigned char byte;
-
 struct levelinfo {
 	int number;
 	int time;
@@ -24,9 +22,7 @@ struct levelinfo {
 	char *password;
 	char *hint;
 	int upperlayersize;
-	byte *upperlayer;
 	int lowerlayersize;
-	byte *lowerlayer;
 };
 
 struct
@@ -128,7 +124,7 @@ void readlevel(FILE *fp, off_t levelsize, struct levelinfo *info)
 
 
 	while (l > 0) {
-		byte fieldnum, fieldlength;
+		int fieldnum, fieldlength;
 		fieldnum = readbyte(fp);
 		fieldlength = readbyte(fp);
 		switch (fieldnum) {
