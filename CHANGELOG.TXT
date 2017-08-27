@@ -1,3 +1,13 @@
+version 1.2	2006-01-04
+-----------------------------
+Added info about how to save output to a file to the readme.
+Added info about how cclpinfo determines if a file is valid.
+cclpinfo now displays the filename, for convenience when the output is 
+saved to a file.
+New feature: 
+ -c option: display chips required to open the chip socket
+
+
 version 1.1	2006-01-03
 -----------------------------
 Changed program slightly to display pi^2.dat correctly.

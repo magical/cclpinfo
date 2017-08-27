@@ -1,8 +1,14 @@
+/* cclpinfo v1.2 */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 
 #define PASSWORD_MASK 0x99
+
+// This is used when seperating the filename from the path.
+// When compiling for *nix, it should be changed to '/'
+#define DIR_SEPERATOR '\\'
 
 typedef unsigned char byte;
 typedef unsigned short int word;
@@ -22,12 +28,14 @@ struct
 struct
 {
 	const char *datfile_name;
+	const char *savefile_name;
 	bool display_passwords:1;
 	bool display_time:1;
 	bool display_hints:1;
+	bool display_chips:1;
 } options;
 
-void displayLevelStats(FILE* fp, word levelsize)
+void displayLevelStats(FILE *fp, word levelsize, FILE *out)
 	{
 	int l;
 	char *j;
@@ -59,15 +67,15 @@ void displayLevelStats(FILE* fp, word levelsize)
 		fread(&fieldlength, sizeof(byte), 1, fp);
 		switch (fieldnum)
 			{
-			// 1 == time limit
-			// 2 == chips
-			case 3:
+			// 1: time limit
+			// 2: chips
+			case 3: // level title
 				levelInfo.title = malloc(fieldlength);
 				fread(levelInfo.title, fieldlength, 1, fp);
 				break;
-			// 4 == trap connections
-			// 5 == clone connections
-			case 6:
+			// 4: trap connections
+			// 5: clone connections
+			case 6: // password
 				levelInfo.password = malloc(fieldlength);
 				fread(levelInfo.password, fieldlength, 1, fp);
 				j = levelInfo.password;
@@ -78,55 +86,66 @@ void displayLevelStats(FILE* fp, word levelsize)
 					}
 				//printf("%s", levelInfo.password);
 				break;
-			case 7:
+			case 7: // level hint
 				levelInfo.hint = malloc(fieldlength);
 				fread(levelInfo.hint, fieldlength, 1, fp);
 				break;
-			// 8 and 9 are purposeless
-			// 10 == creature list
+			// 8 and 9 are nothing
+			// 10: creature list
 			default:
 				fseek(fp, fieldlength, SEEK_CUR);
 			}
 		l -= fieldlength + 2;
 		}
 	
-	printf("%3d. %-50s", levelInfo.number, levelInfo.title);
+	fprintf(out, "%3d. %-35s", levelInfo.number, levelInfo.title);
 	if (options.display_passwords)
 		{
-		printf("\t%s", levelInfo.password);
+		fprintf(out, "\t%s", levelInfo.password);
 		}
 	if (options.display_time)
 		{
 		if (levelInfo.time == 0)
 			{
-			printf("\t---");
+			fputs("\t---", out);
 			}
 		else
 			{
-			printf("\t%03i", levelInfo.time);
+			fprintf(out, "\t%03d", levelInfo.time);
 			}
 		}
-	fputc('\n', stdout);
+	if (options.display_chips)
+		{
+		fprintf(out, "\t%d", levelInfo.chips);
+		}
+
+	fputc('\n', out);
 
 	if (options.display_hints && levelInfo.hint != NULL)
 		{
-		printf("     %s\n", levelInfo.hint);
+		fprintf(out, "     %s\n", levelInfo.hint);
 		}
-
-	if (levelInfo.title != NULL)
-		{
-		free(levelInfo.title);
-		}
-	if (levelInfo.password != NULL)
-		{
-		free(levelInfo.password);
-		}
-	if (levelInfo.hint != NULL)
-		{
-		free(levelInfo.hint);
-		}
+	#define nfree(p) if (p != NULL) free(p)
+	nfree(levelInfo.title);
+	nfree(levelInfo.password);
+	nfree(levelInfo.hint);
+	#undef nfree
 	}
 
+const char* extract_filename(const char *path)
+	{
+	const char *filename = path;
+
+	while (*path)
+		{
+		if (*path == DIR_SEPERATOR)
+			{
+			filename = path+1;
+			}
+		path++;
+		}
+	return filename;
+	}
 
 int processFile(const char* szDatFileName)
 	{
@@ -150,13 +169,15 @@ int processFile(const char* szDatFileName)
 		}
 	fread(&nLevels, sizeof(word), 1, fp);
 	
-	printf("  #. %-50s%s%s\n", "Title", (options.display_passwords?"\tPass":""), (options.display_time?"\tTime":""));
+	printf("%s\n\n", extract_filename(szDatFileName));
+	
+	printf("  #. %-35s%s%s%s\n", "Title", (options.display_passwords?"\tPass":""), (options.display_time?"\tTime":""), (options.display_chips?"\tChips":""));
 	for (l = 1; l <= nLevels; ++l)
 		{
 		word levelSize = 0;
 		fread(&levelSize, sizeof(word), 1, fp);
 		if (levelSize == 0) break;
-		displayLevelStats(fp, levelSize);
+		displayLevelStats(fp, levelSize, stdout);
 		}
 
 	fclose(fp);
@@ -169,47 +190,43 @@ int main(int argc, const char *argv[])
 	
 	if (argc <= 1)
 		{
-		printf("Usage:\t%s datfile [-pth]\n", argv[0]);
+		printf("Usage:\t%s datfile [-ptch]\n", argv[0]);
 		puts("");
 		puts("\tdatfile\tThe location of the .dat file to use");
-		puts("\tp\tDisplay passwords");
-		puts("\tt\tDisplay the time limits");
-		puts("\th\tDisplay the level hints");
+		puts("\tp\tdisplay passwords");
+		puts("\tt\tdisplay the time limits");
+		puts("\tc\tdisplay chips required");
+		puts("\th\tdisplay the level hints");
 		return -1;
 		}
 	
+	// initialize the options
 	options.datfile_name = NULL;
+	options.savefile_name = NULL;
 	options.display_passwords = false;
 	options.display_time = false;
+	options.display_chips = false;
 	options.display_hints = false;
+
 	//parse the command-line options
 	for (i = 1; i < argc; i+=1)
 		{
-		if (argv[i][0] == '-')
+		if (argv[i][0] == '-' )
 			{
 			for (j = 1; j < strlen(argv[i]); j+=1)
 				{
 				switch (argv[i][j])
 					{
 					case 'p':
-						if (options.display_passwords == true)
-							{
-							fputs("Warning: option -p is used more than once\n", stderr);
-							}
 						options.display_passwords = true;
 						break;
 					case 't':
-						if (options.display_time == true)
-							{
-							fputs("Warning: option -t is used more than once\n", stderr);
-							}
 						options.display_time = true;
 						break;
+					case 'c':
+						options.display_chips = true;
+						break;
 					case 'h':
-						if (options.display_hints == true)
-							{
-							fputs("Warning: option -h is used more than once\n", stderr);
-							}
 						options.display_hints = true;
 						break;
 					default:
