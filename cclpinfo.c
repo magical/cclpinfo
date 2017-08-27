@@ -1,6 +1,7 @@
 /* cclpinfo v1.3 */
 
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -9,11 +10,11 @@
 
 // This is used when seperating the filename from the path.
 // When compiling for *nix, it should be changed to '/'
-#define DIR_SEPERATOR '\\'
+#define DIR_SEPERATOR '/'
 
 typedef unsigned char byte;
-typedef unsigned short int word;
-typedef unsigned long int dword;
+typedef uint16_t word;
+typedef uint32_t dword;
 
 struct
 {
