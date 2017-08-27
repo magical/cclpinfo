@@ -45,7 +45,7 @@ passwords, and time limits for every level in "CHIPS.dat"
 -----------------------------------------------------------------------
 
 cclpinfo was written by Andrew E. It is based off a program called datstat
-which was written by Madhav Shanghag and posted to the Chip's Challenge
+which was written by Madhav Shanbhag and posted to the Chip's Challenge
 newsgroup.
 
 You can find the latest version of cclpinfo at 
