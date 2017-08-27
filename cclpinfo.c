@@ -17,12 +17,11 @@ typedef unsigned char byte;
 typedef uint16_t word;
 typedef uint32_t dword;
 
-struct
-{
+struct levelinfo {
 	word number;
 	word time;
 	word chips;
-	word totalchips;
+	int totalchips;
 	char *title;
 	char *password;
 	char *hint;
@@ -30,7 +29,7 @@ struct
 	byte *upperlayer;
 	word lowerlayersize;
 	byte *lowerlayer;
-} levelInfo;
+};
 
 struct
 {
@@ -42,9 +41,42 @@ struct
 	bool display_chips;
 } options;
 
-word count_tiles(byte *layerdata, word layersize, byte search_tile)
+uint8_t readbyte(FILE *fp)
 {
-	word count = 0;
+	byte buf[1] = {};
+	fread(buf, sizeof buf, 1, fp);
+	return buf[0];
+}
+
+uint16_t readword(FILE *fp)
+{
+	byte buf[2] = {};
+	if (fread(buf, sizeof buf, 1, fp) != 1) {
+		return 0;
+	}
+	return ((uint16_t)buf[0]) | ((uint16_t)buf[1] << 8);
+}
+
+uint32_t readdword(FILE *fp)
+{
+	byte buf[4] = {};
+	if (fread(buf, sizeof buf, 1, fp) != 1) {
+		return 0;
+	}
+	return ((uint32_t)buf[0]) | ((uint32_t)buf[1] << 8) | ((uint32_t)buf[2] << 16) | ((uint32_t)buf[3] << 24);
+}
+
+char *readstring(FILE *fp, int len)
+{
+	char *buf = malloc(len + 1);
+	ssize_t n = fread(buf, 1, len, fp);
+	buf[n] = '\0';
+	return buf;
+}
+
+int count_tiles(byte *layerdata, word layersize, byte search_tile)
+{
+	int count = 0;
 	int i = 0;
 
 	while (i < layersize) {
@@ -63,76 +95,61 @@ word count_tiles(byte *layerdata, word layersize, byte search_tile)
 	return count;
 }
 
-void displayLevelStats(FILE *fp, word levelsize, FILE *out)
+void readlevel(FILE *fp, off_t levelsize, struct levelinfo *info)
 {
-	int l;
-	char *j;
-	word length;
+	int l = levelsize;
+	word miscsize;
+	int i;
 
-	l = levelsize;
+	info->number = readword(fp); // the level number
+	info->time = readword(fp);   // the time limit
+	info->chips = readword(fp);  // # chips required
+	readword(fp);                // 0x0001
 
-	levelInfo.title = NULL;
-	levelInfo.password = NULL;
-	levelInfo.hint = NULL;
-
-	fread(&levelInfo.number, sizeof(word), 1, fp); // the level number
-	fread(&levelInfo.time, sizeof(word), 1, fp);   // the time limit
-	fread(&levelInfo.chips, sizeof(word), 1, fp);  // # chips required
-	fseek(fp, sizeof(word), SEEK_CUR);             // 0x0001
-
-	fread(&levelInfo.upperlayersize, sizeof(word), 1, fp); // length of upper layer data
+	info->totalchips = 0;
 	if (options.display_chips) {
-		levelInfo.upperlayer = malloc(levelInfo.upperlayersize);
-		fread(levelInfo.upperlayer, sizeof(byte), levelInfo.upperlayersize, fp);
-	} else {
-		fseek(fp, levelInfo.upperlayersize, SEEK_CUR);
-	}
-	l -= levelInfo.upperlayersize;
+		info->upperlayersize = readword(fp); // length of upper layer data
+		info->upperlayer = malloc(info->upperlayersize);
+		fread(info->upperlayer, sizeof(byte), info->upperlayersize, fp);
 
-	fread(&levelInfo.lowerlayersize, sizeof(word), 1, fp); // length of lower layer data
-	if (options.display_chips) {
-		levelInfo.lowerlayer = malloc(levelInfo.lowerlayersize);
-		fread(levelInfo.lowerlayer, sizeof(byte), levelInfo.lowerlayersize, fp);
-	} else {
-		fseek(fp, levelInfo.lowerlayersize, SEEK_CUR);
-	}
-	l -= levelInfo.lowerlayersize;
+		info->lowerlayersize = readword(fp); // length of lower layer data
+		info->lowerlayer = malloc(info->lowerlayersize);
+		fread(info->lowerlayer, sizeof(byte), info->lowerlayersize, fp);
 
-	fread(&length, sizeof(word), 1, fp); // length of misc data
+		info->totalchips += count_tiles(info->upperlayer, info->upperlayersize, CHIP_TILE);
+		info->totalchips += count_tiles(info->lowerlayer, info->lowerlayersize, CHIP_TILE);
+	} else {
+		info->upperlayersize = readword(fp); // length of upper layer data
+		fseek(fp, info->upperlayersize, SEEK_CUR);
+		info->lowerlayersize = readword(fp); // length of lower layer data
+		fseek(fp, info->lowerlayersize, SEEK_CUR);
+	}
+	l -= info->upperlayersize;
+	l -= info->lowerlayersize;
+
+	miscsize = readword(fp); // length of misc data
 	l -= sizeof(word) * 7;
-
-	if (options.display_chips) {
-		levelInfo.totalchips = 0;
-		levelInfo.totalchips += count_tiles(levelInfo.upperlayer, levelInfo.upperlayersize, CHIP_TILE);
-		levelInfo.totalchips += count_tiles(levelInfo.lowerlayer, levelInfo.lowerlayersize, CHIP_TILE);
-	}
 
 	while (l > 0) {
 		byte fieldnum, fieldlength;
-		fread(&fieldnum, sizeof(byte), 1, fp);
-		fread(&fieldlength, sizeof(byte), 1, fp);
+		fieldnum = readbyte(fp);
+		fieldlength = readbyte(fp);
 		switch (fieldnum) {
 		// 1: time limit
 		// 2: chips
 		case 3: // level title
-			levelInfo.title = malloc(fieldlength);
-			fread(levelInfo.title, fieldlength, 1, fp);
+			info->title = readstring(fp, fieldlength);
 			break;
 		// 4: trap connections
 		// 5: clone connections
 		case 6: // password
-			levelInfo.password = malloc(fieldlength);
-			fread(levelInfo.password, fieldlength, 1, fp);
-			j = levelInfo.password;
-			while (*j) {
-				*j = *j ^ PASSWORD_MASK;
-				j++;
+			info->password = readstring(fp, fieldlength);
+			for (i = 0; i < fieldlength && info->password[i] != '\0'; i++) {
+				info->password[i] ^= PASSWORD_MASK;
 			}
-			//printf("%s", levelInfo.password);
 			break;
 		case 7: // level hint
-			levelInfo.hint = malloc(fieldlength);
-			fread(levelInfo.hint, fieldlength, 1, fp);
+			info->hint = readstring(fp, fieldlength);
 			break;
 		// I don't know what 8 and 9 are for
 		// 10: creature list
@@ -141,49 +158,54 @@ void displayLevelStats(FILE *fp, word levelsize, FILE *out)
 		}
 		l -= fieldlength + 2;
 	}
+}
 
-	fprintf(out, "%3d. %-35s ", levelInfo.number, levelInfo.title);
+void freelevel(struct levelinfo *info)
+{
+	free(info->title);
+	free(info->password);
+	free(info->hint);
+
+	info->title = NULL;
+	info->password = NULL;
+	info->hint = NULL;
+}
+
+void printlevel(FILE *out, struct levelinfo *info)
+{
+	fprintf(out, "%3d. %-35s ", info->number, info->title);
 	if (options.display_passwords) {
-		fprintf(out, "\t%s", levelInfo.password);
+		fprintf(out, "\t%s", info->password);
 	}
 	if (options.display_time) {
-		if (levelInfo.time == 0) {
-			fputs("\t---", out);
+		if (info->time == 0) {
+			fprintf(out, "\t---");
 		} else {
-			fprintf(out, "\t%03d", levelInfo.time);
+			fprintf(out, "\t%03d", info->time);
 		}
 	}
 	if (options.display_chips) {
-		if (levelInfo.chips == levelInfo.totalchips) {
-			fprintf(out, "\t%d", levelInfo.chips);
+		if (info->chips == info->totalchips) {
+			fprintf(out, "\t%d", info->chips);
 		} else {
-			fprintf(out, "\t%d/%d", levelInfo.chips, levelInfo.totalchips);
+			fprintf(out, "\t%d/%d", info->chips, info->totalchips);
 		}
 	}
 
-	fputc('\n', out);
+	fprintf(out, "\n");
 
-	if (options.display_hints && levelInfo.hint != NULL) {
-		fprintf(out, "     %s\n", levelInfo.hint);
+	if (options.display_hints && info->hint != NULL) {
+		fprintf(out, "     %s\n", info->hint);
 	}
-#define nfree(p)       \
-	if (p != NULL) \
-	free(p)
-	nfree(levelInfo.title);
-	nfree(levelInfo.password);
-	nfree(levelInfo.hint);
-#undef nfree
 }
 
 const char *extract_filename(const char *path)
 {
 	const char *filename = path;
-
-	while (*path) {
+	for (; *path; path++) {
 		if (*path == DIR_SEPERATOR) {
 			filename = path + 1;
 		}
-		path++;
 	}
 	return filename;
 }
@@ -191,8 +213,9 @@ const char *extract_filename(const char *path)
 int processFile(const char *szDatFileName)
 {
 	FILE *fp = NULL;
+	struct levelinfo info = {};
 	word nLevels = 0, l;
-	dword signature;
+	uint32_t signature;
 
 	fp = fopen(szDatFileName, "rb");
 	if (!fp) {
@@ -200,23 +223,29 @@ int processFile(const char *szDatFileName)
 		return 1;
 	}
 
-	fread(&signature, sizeof(dword), 1, fp);
+	signature = readdword(fp);
 	if (signature != 0x0002aaac && signature != 0x0102aaac) {
 		fprintf(stderr, "%s is not a valid Chip's Challenge file.\n", szDatFileName);
 		fclose(fp);
 		return 1;
 	}
-	fread(&nLevels, sizeof(word), 1, fp);
+
+	nLevels = readword(fp);
 
 	printf("%s\n\n", extract_filename(szDatFileName));
 
-	printf("  #. %-35s%s%s%s\n", "Title", (options.display_passwords ? "\tPass" : ""), (options.display_time ? "\tTime" : ""), (options.display_chips ? "\tChips" : ""));
+	printf("  #. %-35s%s%s%s\n", "Title",
+	       (options.display_passwords ? "\tPass" : ""),
+	       (options.display_time ? "\tTime" : ""),
+	       (options.display_chips ? "\tChips" : ""));
+
 	for (l = 1; l <= nLevels; ++l) {
-		word levelSize = 0;
-		fread(&levelSize, sizeof(word), 1, fp);
-		if (levelSize == 0)
+		word levelsize = readword(fp);
+		if (levelsize == 0)
 			break;
-		displayLevelStats(fp, levelSize, stdout);
+		readlevel(fp, levelsize, &info);
+		printlevel(stdout, &info);
+		freelevel(&info);
 	}
 
 	fclose(fp);
@@ -239,7 +268,7 @@ int main(int argc, const char *argv[])
 		puts("\t-h\tdisplay the level hints");
 		puts("");
 		puts("For more information, read README.TXT");
-		return -1;
+		return 2;
 	}
 
 	// initialize the options
@@ -273,11 +302,10 @@ int main(int argc, const char *argv[])
 			}
 		} else if (options.datfile_name == NULL) {
 			options.datfile_name = argv[i];
-		} else {
 		}
 	}
 	if (options.datfile_name == NULL) {
-		fputs("Error: no datfile is specified", stderr);
+		fprintf(stderr, "Error: no datfile is specified");
 		return -1;
 	}
 
