@@ -1,3 +1,19 @@
+version 1.4	2017-08-27
+-----------------------------
+
+New features:
+- cclpinfo has a new home on github: https://github.com/magical/cclpinfo
+- you can now give cclpinfo multiple files on the command line and it will list
+  all of them
+- cclpinfo can now read levelsets that use pgchip
+
+Bug fixes:
+- rewrote most of the code
+- fixed signature checking on 64-bit architectures
+- removed some assumptions about endianness -- cclpinfo should now work on
+  big-endian architectures
+- fixed heap corruption when parsing certain invalid files (found with afl-fuzz)
+
 version 1.3	2006-01-09
 -----------------------------
 The -c option now not only displays the chips required, but also the
