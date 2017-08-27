@@ -1,4 +1,4 @@
-/* cclpinfo v1.3 */
+/* cclpinfo v1.4 */
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -228,7 +228,7 @@ int main(int argc, const char *argv[])
 	int i, j;
 
 	if (argc <= 1) {
-		puts("cclpinfo v1.3 written by Andrew E. and Madhav Shanbhag");
+		puts("cclpinfo v1.4 written by Andrew E. and Madhav Shanbhag");
 		puts("");
 		printf("Usage:\t%s file [-ptch]\n", argv[0]);
 		puts("");
