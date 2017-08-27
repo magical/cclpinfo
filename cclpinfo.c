@@ -232,7 +232,7 @@ int processFile(const char *filename)
 
 	signature = readword(fp);
 	version = readword(fp);
-	if (signature != 0xaaac || (version != 0x0002 && version != 0x0102)) {
+	if (signature != 0xaaac || (version != 0x0002 && version != 0x0102 && version != 0x0003)) {
 		fprintf(stderr, "%s is not a valid Chip's Challenge file.\n", filename);
 		fclose(fp);
 		return 1;
