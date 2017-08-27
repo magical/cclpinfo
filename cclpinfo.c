@@ -10,10 +10,6 @@
 #define PASSWORD_MASK 0x99
 #define CHIP_TILE 0x02
 
-// This is used when seperating the filename from the path.
-// When compiling for *nix, it should be changed to '/'
-#define DIR_SEPERATOR '/'
-
 struct levelinfo {
 	int number;
 	int time;
@@ -214,7 +210,7 @@ const char *extract_filename(const char *path)
 {
 	const char *filename = path;
 	for (; *path; path++) {
-		if (*path == DIR_SEPERATOR) {
+		if (*path == '/' || *path == '\\') {
 			filename = path + 1;
 		}
 	}
