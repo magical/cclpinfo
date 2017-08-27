@@ -1,10 +1,11 @@
-/* cclpinfo v1.2 */
+/* cclpinfo v1.3 */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 
 #define PASSWORD_MASK 0x99
+#define CHIP_TILE (word) 0x02
 
 // This is used when seperating the filename from the path.
 // When compiling for *nix, it should be changed to '/'
@@ -14,15 +15,19 @@ typedef unsigned char byte;
 typedef unsigned short int word;
 typedef unsigned long int dword;
 
-
 struct
 {
 	word number;
 	word time;
 	word chips;
+	word totalchips;
 	char *title;
 	char *password;
 	char *hint;
+	word upperlayersize;
+	byte *upperlayer;
+	word lowerlayersize;
+	byte *lowerlayer;
 } levelInfo;
 
 struct
@@ -34,6 +39,34 @@ struct
 	bool display_hints:1;
 	bool display_chips:1;
 } options;
+
+word count_tiles(byte *layerdata, word layersize, byte search_tile)
+	{
+	word count = 0;
+	int i = 0;
+
+	while (i < layersize)
+		{
+		if (layerdata[i] == search_tile)
+			{
+			count += 1;
+			i += 1;
+			}
+		else if (layerdata[i] == 0xff)
+			{
+			if (layerdata[i+2] == search_tile)
+				{
+				count += layerdata[i+1];
+				}
+			i += 3;
+			}
+		else
+			{
+			i += 1;
+			}
+		}	
+	return count;	
+	}
 
 void displayLevelStats(FILE *fp, word levelsize, FILE *out)
 	{
@@ -51,15 +84,41 @@ void displayLevelStats(FILE *fp, word levelsize, FILE *out)
 	fread(&levelInfo.time, sizeof(word), 1, fp); // the time limit
 	fread(&levelInfo.chips, sizeof(word), 1, fp); // # chips required
 	fseek(fp, sizeof(word), SEEK_CUR); // 0x0001
-	fread(&length, sizeof(word), 1, fp); // length of upper layer data
-	fseek(fp, length, SEEK_CUR); // we don't care about the level data
-	l -= length;
-	fread(&length, sizeof(word), 1, fp); // length of lower layer data
-	fseek(fp, length, SEEK_CUR);
-	l -= length;
+
+	fread(&levelInfo.upperlayersize, sizeof(word), 1, fp); // length of upper layer data
+	if (options.display_chips)
+		{
+		levelInfo.upperlayer = malloc(levelInfo.upperlayersize);
+		fread(levelInfo.upperlayer, sizeof(byte), levelInfo.upperlayersize, fp);
+		}
+	else
+		{
+		fseek(fp, levelInfo.upperlayersize, SEEK_CUR);
+		}
+	l -= levelInfo.upperlayersize;
+	
+	fread(&levelInfo.lowerlayersize, sizeof(word), 1, fp); // length of lower layer data
+	if (options.display_chips)
+		{
+		levelInfo.lowerlayer = malloc(levelInfo.lowerlayersize);
+		fread(levelInfo.lowerlayer, sizeof(byte), levelInfo.lowerlayersize, fp);
+		}
+	else
+		{
+		fseek(fp, levelInfo.lowerlayersize, SEEK_CUR);
+		}
+	l -= levelInfo.lowerlayersize;
+
 	fread(&length, sizeof(word), 1, fp); // length of misc data
 	l -= sizeof(word) * 7;
 
+	if (options.display_chips)
+		{
+		levelInfo.totalchips = 0;
+		levelInfo.totalchips += count_tiles(levelInfo.upperlayer, levelInfo.upperlayersize, CHIP_TILE);
+		levelInfo.totalchips += count_tiles(levelInfo.lowerlayer, levelInfo.lowerlayersize, CHIP_TILE);
+		}
+	
 	while (l > 0)
 		{
 		byte fieldnum, fieldlength;
@@ -90,7 +149,7 @@ void displayLevelStats(FILE *fp, word levelsize, FILE *out)
 				levelInfo.hint = malloc(fieldlength);
 				fread(levelInfo.hint, fieldlength, 1, fp);
 				break;
-			// 8 and 9 are nothing
+			// I don't know what 8 and 9 are for
 			// 10: creature list
 			default:
 				fseek(fp, fieldlength, SEEK_CUR);
@@ -98,7 +157,7 @@ void displayLevelStats(FILE *fp, word levelsize, FILE *out)
 		l -= fieldlength + 2;
 		}
 	
-	fprintf(out, "%3d. %-35s", levelInfo.number, levelInfo.title);
+	fprintf(out, "%3d. %-35s ", levelInfo.number, levelInfo.title);
 	if (options.display_passwords)
 		{
 		fprintf(out, "\t%s", levelInfo.password);
@@ -116,7 +175,14 @@ void displayLevelStats(FILE *fp, word levelsize, FILE *out)
 		}
 	if (options.display_chips)
 		{
-		fprintf(out, "\t%d", levelInfo.chips);
+		if (levelInfo.chips == levelInfo.totalchips)
+			{
+			fprintf(out, "\t%d", levelInfo.chips);
+			}
+		else
+			{
+			fprintf(out, "\t%d/%d", levelInfo.chips, levelInfo.totalchips);
+			}
 		}
 
 	fputc('\n', out);
@@ -190,13 +256,17 @@ int main(int argc, const char *argv[])
 	
 	if (argc <= 1)
 		{
-		printf("Usage:\t%s datfile [-ptch]\n", argv[0]);
+		puts("cclpinfo v1.3 written by Andrew E. and Madhav Shanbhag");
 		puts("");
-		puts("\tdatfile\tThe location of the .dat file to use");
-		puts("\tp\tdisplay passwords");
-		puts("\tt\tdisplay the time limits");
-		puts("\tc\tdisplay chips required");
-		puts("\th\tdisplay the level hints");
+		printf("Usage:\t%s file [-ptch]\n", argv[0]);
+		puts("");
+		puts("\tfile\tThe location of the .dat file to use");
+		puts("\t-p\tdisplay passwords");
+		puts("\t-t\tdisplay the time limits");
+		puts("\t-c\tdisplay chips required/available");
+		puts("\t-h\tdisplay the level hints");
+		puts("");
+		puts("For more information, read README.TXT");
 		return -1;
 		}
 	

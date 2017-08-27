@@ -1,3 +1,14 @@
+version 1.3	2006-01-09
+-----------------------------
+The -c option now not only displays the chips required, but also the
+number of chips in the level. If the number of required chips is the
+same as the number of available chips, only one number is displayed;
+but if they are different, they are both displayed. Example:
+
+103. Island Hopping                             30
+104. Pyramid                                    66/84
+
+
 version 1.2	2006-01-04
 -----------------------------
 Added info about how to save output to a file to the readme.
