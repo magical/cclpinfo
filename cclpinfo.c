@@ -36,10 +36,10 @@ struct
 {
 	const char *datfile_name;
 	const char *savefile_name;
-	bool display_passwords : 1;
-	bool display_time : 1;
-	bool display_hints : 1;
-	bool display_chips : 1;
+	bool display_passwords;
+	bool display_time;
+	bool display_hints;
+	bool display_chips;
 } options;
 
 word count_tiles(byte *layerdata, word layersize, byte search_tile)
