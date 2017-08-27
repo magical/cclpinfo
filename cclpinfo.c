@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define PASSWORD_MASK 0x99
 #define CHIP_TILE (word)0x02
