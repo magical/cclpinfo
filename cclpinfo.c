@@ -27,12 +27,14 @@ struct
 	bool display_hints:1;
 } options;
 
-void displayLevelStats(FILE* fp)
+void displayLevelStats(FILE* fp, word levelsize)
 	{
-	int i = 0;
+	int l;
 	char *j;
 	word length;
 
+	l = levelsize;
+	
 	levelInfo.title = NULL;
 	levelInfo.password = NULL;
 	levelInfo.hint = NULL;
@@ -43,12 +45,14 @@ void displayLevelStats(FILE* fp)
 	fseek(fp, sizeof(word), SEEK_CUR); // 0x0001
 	fread(&length, sizeof(word), 1, fp); // length of upper layer data
 	fseek(fp, length, SEEK_CUR); // we don't care about the level data
+	l -= length;
 	fread(&length, sizeof(word), 1, fp); // length of lower layer data
 	fseek(fp, length, SEEK_CUR);
+	l -= length;
 	fread(&length, sizeof(word), 1, fp); // length of misc data
+	l -= sizeof(word) * 7;
 
-	i = 0;
-	while (i < length)
+	while (l > 0)
 		{
 		byte fieldnum, fieldlength;
 		fread(&fieldnum, sizeof(byte), 1, fp);
@@ -83,7 +87,7 @@ void displayLevelStats(FILE* fp)
 			default:
 				fseek(fp, fieldlength, SEEK_CUR);
 			}
-		i += fieldlength + 2;
+		l -= fieldlength + 2;
 		}
 	
 	printf("%3d. %-50s", levelInfo.number, levelInfo.title);
@@ -152,7 +156,7 @@ int processFile(const char* szDatFileName)
 		word levelSize = 0;
 		fread(&levelSize, sizeof(word), 1, fp);
 		if (levelSize == 0) break;
-		displayLevelStats(fp);
+		displayLevelStats(fp, levelSize);
 		}
 
 	fclose(fp);
@@ -165,7 +169,7 @@ int main(int argc, const char *argv[])
 	
 	if (argc <= 1)
 		{
-		puts("Usage:\tdatstat datfile [-pth]");
+		printf("Usage:\t%s datfile [-pth]\n", argv[0]);
 		puts("");
 		puts("\tdatfile\tThe location of the .dat file to use");
 		puts("\tp\tDisplay passwords");

@@ -1,0 +1,19 @@
+version 1.1	2006-01-03
+-----------------------------
+Changed program slightly to display pi^2.dat correctly.
+Changed program name to "cclpinfo".
+
+
+version 1.0	2006-01-02
+-----------------------------
+Initial release under name "newstat".
+New features:
+ - password display
+ - time limit display
+ - hint display
+ - checks signature of file
+
+
+datstat version 1.0	2006-01-01
+-----------------------------
+Written by Madhav Shanbhag, who posted it on the Chip's Challenge newsgroup.
