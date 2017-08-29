@@ -58,16 +58,18 @@ uint16_t readword(struct file *file)
 	return ((uint16_t)buf[0]) | ((uint16_t)buf[1] << 8);
 }
 
-char *readstring(struct file *file, int len, char *debug_name)
+void readstring(struct file *file, int len, char **bufp, char *debug_name)
 {
-	char *buf = malloc(len + 1);
-	ssize_t n = fread(buf, 1, len, file->fp);
+	char *buf;
+	ssize_t n;
+
+	buf = *bufp = realloc(*bufp, len + 1);
+	n = fread(buf, 1, len, file->fp);
+	file->pos += n;
 	if (n > 0 && buf[n - 1] != '\0') {
 		fprintf(stderr, "%s:%d: warning: %s not null terminated\n", file->name, file->pos, debug_name);
 	}
 	buf[n] = '\0';
-	file->pos += n;
-	return buf;
 }
 
 void skipbytes(struct file *file, int n)
@@ -164,18 +166,18 @@ void readlevel(struct file *file, off_t levelsize, struct levelinfo *info)
 		// 1: time limit
 		// 2: chips
 		case 3: // level title
-			info->title = readstring(file, fieldlength, "level title");
+			readstring(file, fieldlength, &info->title, "level title");
 			break;
 		// 4: trap connections
 		// 5: clone connections
 		case 6: // password
-			info->password = readstring(file, fieldlength, "password");
+			readstring(file, fieldlength, &info->password, "password");
 			for (i = 0; i < fieldlength && info->password[i] != '\0'; i++) {
 				info->password[i] ^= PASSWORD_MASK;
 			}
 			break;
 		case 7: // level hint
-			info->hint = readstring(file, fieldlength, "hint");
+			readstring(file, fieldlength, &info->hint, "hint");
 			break;
 		// I don't know what 8 and 9 are for
 		// 10: creature list
