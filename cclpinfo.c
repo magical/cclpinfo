@@ -10,7 +10,15 @@
 #define PASSWORD_MASK 0x99
 #define CHIP_TILE 0x02
 
-struct levelinfo {
+struct file
+{
+	FILE *fp;
+	const char *name;
+	int pos;
+};
+
+struct levelinfo
+{
 	int number;
 	int time;
 	int chips;
@@ -30,67 +38,78 @@ struct
 	bool showchips;
 } options;
 
-uint8_t readbyte(FILE *fp)
+uint8_t readbyte(struct file *file)
 {
 	uint8_t buf[1] = {};
-	fread(buf, sizeof buf, 1, fp);
+	if (fread(buf, sizeof buf, 1, file->fp) != 1) {
+		return 0;
+	}
+	file->pos += 1;
 	return buf[0];
 }
 
-uint16_t readword(FILE *fp)
+uint16_t readword(struct file *file)
 {
 	uint8_t buf[2] = {};
-	if (fread(buf, sizeof buf, 1, fp) != 1) {
+	if (fread(buf, sizeof buf, 1, file->fp) != 1) {
 		return 0;
 	}
+	file->pos += 2;
 	return ((uint16_t)buf[0]) | ((uint16_t)buf[1] << 8);
 }
 
-char *readstring(FILE *fp, int len)
+char *readstring(struct file *file, int len, char *debug_name)
 {
 	char *buf = malloc(len + 1);
-	ssize_t n = fread(buf, 1, len, fp);
+	ssize_t n = fread(buf, 1, len, file->fp);
 	if (n > 0 && buf[n - 1] != '\0') {
-		fprintf(stderr, "warning: string not null terminated\n");
+		fprintf(stderr, "%s:%d: warning: %s not null terminated\n", file->name, file->pos, debug_name);
 	}
 	buf[n] = '\0';
+	file->pos += n;
 	return buf;
 }
 
-void skipbytes(FILE *fp, int n)
+void skipbytes(struct file *file, int n)
 {
-	if (fseek(fp, n, SEEK_CUR) < 0) {
-		while (n--) {
-			fgetc(fp);
-		}
+	if (fseek(file->fp, n, SEEK_CUR) == 0) {
+		file->pos += n;
+	} else {
 		//perror("fseek");
+		// unseekable file
+		for (; n > 0; n--) {
+			if (fgetc(file->fp) == EOF) {
+				break;
+			}
+			file->pos += 1;
+		}
 	}
 }
 
-void warn(const char *fmt, ...)
+void warnf(const char *fmt, ...)
 {
 	va_list va;
 	va_start(va, fmt);
 	vfprintf(stderr, fmt, va);
 	va_end(va);
-	fprintf(stderr, "\n");
 	//abort();
 }
 
-int count_tiles(FILE *fp, int layersize, int search_tile)
+int count_tiles(struct file *file, int layersize, int search_tile)
 {
 	int count = 0;
 	int c, tile;
 
 	while (layersize > 0) {
-		c = fgetc(fp);
+		c = fgetc(file->fp);
 		if (c == EOF) {
-			warn("unexpected end of file");
+			warnf("%s:%d: warning: unexpected end of file\n", file->name, file->pos);
 			break;
 		}
+		file->pos += 1;
 		if (c == 0xff) {
-			c = fgetc(fp);
-			tile = fgetc(fp);
+			c = readbyte(file);
+			tile = readbyte(file);
 			if (tile == search_tile) {
 				count += c;
 			}
@@ -105,63 +124,63 @@ int count_tiles(FILE *fp, int layersize, int search_tile)
 	return count;
 }
 
-void readlevel(FILE *fp, off_t levelsize, struct levelinfo *info)
+void readlevel(struct file *file, off_t levelsize, struct levelinfo *info)
 {
 	int l = levelsize;
 	int miscsize;
 	int i;
 
-	info->number = readword(fp); // the level number
-	info->time = readword(fp);   // the time limit
-	info->chips = readword(fp);  // # chips required
-	readword(fp);                // 0x0001
+	info->number = readword(file); // the level number
+	info->time = readword(file);   // the time limit
+	info->chips = readword(file);  // # chips required
+	readword(file);                // 0x0001
 	l -= 2 * 4;
 
 	info->totalchips = 0;
-	info->upperlayersize = readword(fp); // length of upper layer data
-	info->totalchips += count_tiles(fp, info->upperlayersize, CHIP_TILE);
-	info->lowerlayersize = readword(fp); // length of lower layer data
-	info->totalchips += count_tiles(fp, info->lowerlayersize, CHIP_TILE);
+	info->upperlayersize = readword(file); // length of upper layer data
+	info->totalchips += count_tiles(file, info->upperlayersize, CHIP_TILE);
+	info->lowerlayersize = readword(file); // length of lower layer data
+	info->totalchips += count_tiles(file, info->lowerlayersize, CHIP_TILE);
 
 	l -= 2 + info->upperlayersize;
 	l -= 2 + info->lowerlayersize;
 
-	miscsize = readword(fp); // length of misc data
+	miscsize = readword(file); // length of misc data
 	l -= 2;
 
 	if (miscsize != l) {
-		warn("mismatch between level size and misc data size");
+		warnf("%s: mismatch between level size and misc data size\n", file->name);
 	}
 
 	if (miscsize > 1152) {
-		warn("misc data size is greater than 1152 bytes; MSCC will not be able to load this level");
+		warnf("%s: misc data size exceeds 1152 bytes; MSCC will not be able to load this level\n", file->name);
 	}
 
 	while (l > 0) {
 		int fieldnum, fieldlength;
-		fieldnum = readbyte(fp);
-		fieldlength = readbyte(fp);
+		fieldnum = readbyte(file);
+		fieldlength = readbyte(file);
 		switch (fieldnum) {
 		// 1: time limit
 		// 2: chips
 		case 3: // level title
-			info->title = readstring(fp, fieldlength);
+			info->title = readstring(file, fieldlength, "level title");
 			break;
 		// 4: trap connections
 		// 5: clone connections
 		case 6: // password
-			info->password = readstring(fp, fieldlength);
+			info->password = readstring(file, fieldlength, "password");
 			for (i = 0; i < fieldlength && info->password[i] != '\0'; i++) {
 				info->password[i] ^= PASSWORD_MASK;
 			}
 			break;
 		case 7: // level hint
-			info->hint = readstring(fp, fieldlength);
+			info->hint = readstring(file, fieldlength, "hint");
 			break;
 		// I don't know what 8 and 9 are for
 		// 10: creature list
 		default:
-			skipbytes(fp, fieldlength);
+			skipbytes(file, fieldlength);
 		}
 		l -= fieldlength + 2;
 	}
@@ -220,6 +239,7 @@ const char *extract_filename(const char *path)
 int processFile(const char *filename)
 {
 	FILE *fp = NULL;
+	struct file file = {};
 	struct levelinfo info = {};
 	int nLevels, i;
 	uint16_t signature, version;
@@ -230,15 +250,19 @@ int processFile(const char *filename)
 		return 1;
 	}
 
-	signature = readword(fp);
-	version = readword(fp);
+	file.fp = fp;
+	file.name = filename;
+	file.pos = 0;
+
+	signature = readword(&file);
+	version = readword(&file);
 	if (signature != 0xaaac || (version != 0x0002 && version != 0x0102 && version != 0x0003)) {
 		fprintf(stderr, "%s is not a valid Chip's Challenge file.\n", filename);
 		fclose(fp);
 		return 1;
 	}
 
-	nLevels = readword(fp);
+	nLevels = readword(&file);
 
 	printf("%s\n\n", extract_filename(filename));
 
@@ -248,10 +272,10 @@ int processFile(const char *filename)
 	       (options.showchips ? "\tChips" : ""));
 
 	for (i = 1; i <= nLevels; i++) {
-		int levelsize = readword(fp);
+		int levelsize = readword(&file);
 		if (levelsize == 0)
 			break;
-		readlevel(fp, levelsize, &info);
+		readlevel(&file, levelsize, &info);
 		printlevel(stdout, &info);
 		freelevel(&info);
 	}
