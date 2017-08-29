@@ -9,6 +9,7 @@
 
 #define PASSWORD_MASK 0x99
 #define CHIP_TILE 0x02
+#define LAYER_SIZE (32 * 32)
 
 struct file
 {
@@ -97,10 +98,13 @@ void warnf(const char *fmt, ...)
 	//abort();
 }
 
-int count_tiles(struct file *file, int layersize, int search_tile)
+int count_tiles(struct file *file, int layersize, int search_tile, char *layer_name)
 {
+	int total = 0;
 	int count = 0;
 	int c, tile;
+
+	int start = file->pos;
 
 	while (layersize > 0) {
 		c = fgetc(file->fp);
@@ -115,14 +119,21 @@ int count_tiles(struct file *file, int layersize, int search_tile)
 			if (tile == search_tile) {
 				count += c;
 			}
+			total += c;
 			layersize -= 3;
 		} else {
 			if (c == search_tile) {
 				count += 1;
 			}
+			total += 1;
 			layersize -= 1;
 		}
 	}
+
+	if (total != LAYER_SIZE) {
+		warnf("%s:%d: warning: %s layer has %d tiles, expected %d\n", file->name, start, layer_name, total, LAYER_SIZE);
+	}
+
 	return count;
 }
 
@@ -140,9 +151,9 @@ void readlevel(struct file *file, off_t levelsize, struct levelinfo *info)
 
 	info->totalchips = 0;
 	info->upperlayersize = readword(file); // length of upper layer data
-	info->totalchips += count_tiles(file, info->upperlayersize, CHIP_TILE);
+	info->totalchips += count_tiles(file, info->upperlayersize, CHIP_TILE, "upper");
 	info->lowerlayersize = readword(file); // length of lower layer data
-	info->totalchips += count_tiles(file, info->lowerlayersize, CHIP_TILE);
+	info->totalchips += count_tiles(file, info->lowerlayersize, CHIP_TILE, "lower");
 
 	l -= 2 + info->upperlayersize;
 	l -= 2 + info->lowerlayersize;
